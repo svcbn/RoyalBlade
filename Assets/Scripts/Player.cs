@@ -7,17 +7,39 @@ using UnityEngine;
 
 public class Player : MonoBehaviour
 {
-    int _hp = 0;
+    public static Player instance;
 
-    public int HP
+    int _jumpSkillCount = 0;
+    [SerializeField] int maxJumpSkillCount = 3;
+    public int JumpSkillCount
     {
         get
         {
-            return _hp;
+            return _jumpSkillCount;
         }
         set
         {
-            _hp = value;
+            if (_jumpSkillCount < maxJumpSkillCount)
+            {
+                _jumpSkillCount = value;
+            }
+        }
+    }
+
+    int _attackSkillCount = 0;
+    [SerializeField] int maxAttackSkillCount = 10;
+    public int AttackSkillCount
+    {
+        get
+        {
+            return _attackSkillCount;
+        }
+        set
+        {
+            if (_attackSkillCount < maxAttackSkillCount)
+            {
+                _attackSkillCount = value;
+            }
         }
     }
 
@@ -28,24 +50,36 @@ public class Player : MonoBehaviour
         Crush
     };
     
-    public PlayerState state;
+    public PlayerState playerstate;
 
-    public float gravityAccel = 0;
-    public float jumpPower = 10f;
+    [SerializeField] float jumpPower = 20f;
     Rigidbody2D rb;
 
-
+    private void Awake()
+    {
+        if (instance == null)
+        {
+            instance = this;
+        }
+        else
+        {
+            Destroy(this);
+        }
+    }
 
     void Start()
     {
-        state = PlayerState.Idle;
+        playerstate = PlayerState.Idle;
         rb = GetComponent<Rigidbody2D>();
-
+        attackArea.SetActive(false);
+        guardArea.SetActive(false);
+        isGuardCoolDown = false;
     }
 
-    void Update()
+    void ChangeState(PlayerState state)
     {
-        switch (state)
+        playerstate = state;
+        switch (playerstate)
         {
             case PlayerState.Idle:
                 PlayerIdle();
@@ -59,35 +93,145 @@ public class Player : MonoBehaviour
         }
     }
 
-    bool isJump = false;
     void PlayerIdle()
     {
-
+        isGround = true;
+        rb.simulated = true;
     }
 
     void PlayerAir()
     {
-
+        isGround = false;
     }
 
     void PlayerCrush()
     {
-
+        rb.simulated = false;
+        GameManager.instance.Combo = 0;
+        GameManager.instance.playerHP--;
     }
 
+    [SerializeField]bool isGround = false;
     public void Jump()
     {
-        if (state != PlayerState.Idle) return;
+        if (playerstate != PlayerState.Idle) return;
 
         rb.velocity += Vector2.up * jumpPower;
-        state = PlayerState.Air;
+        JumpSkillCount++;
+        ChangeState(PlayerState.Air);
+    }
+
+    bool isAttack = false;
+    public void Attack()
+    {
+        if(isAttack) return;
+        
+        StartCoroutine(CoAttack());
+        if(playerstate == PlayerState.Air)
+        {
+            onCollisionEnemy = false;
+        }
+        if (playerstate == PlayerState.Crush)
+        {
+            rb.simulated = true;
+        }
+    }
+
+    [SerializeField] float attackDelayTime = 0.15f;
+    [HideInInspector] public GameObject attackArea;
+    IEnumerator CoAttack()
+    {
+        isAttack = true;
+        float currentTime = 0;
+        attackArea.SetActive(true);
+
+        while(currentTime < attackDelayTime)
+        {
+            currentTime += Time.deltaTime;
+            if (currentTime > 0.05f) attackArea.SetActive(false);
+            yield return null;
+        }
+        isAttack = false;
+    }
+
+    [HideInInspector] public bool isGuard = false;
+    [HideInInspector] public GameObject guardArea;
+    public void Guard()
+    {
+        if (isGuardCoolDown) return;
+        isGuard = true;
+        guardArea.SetActive(true);
+    }
+
+    [SerializeField] float defensePower = 15f;
+    public void Defense(Collider2D collision)
+    {
+        collision.gameObject.GetComponent<Rigidbody2D>().velocity += (Vector2.up * defensePower);
+        rb.velocity += (Vector2.down * defensePower);
+        StartCoroutine(GuardCoolDown());
+        if(playerstate == PlayerState.Crush)
+        {
+            ChangeState(PlayerState.Idle);
+        }
+    }
+
+    [HideInInspector] public bool isGuardCoolDown = false;
+    [SerializeField] float guardCoolDownTime = 2f;
+
+    public IEnumerator GuardCoolDown()
+    {
+        isGuard = false;
+        isGuardCoolDown = true;
+        guardArea.SetActive(false);
+        float currentTime = 0;
+
+        while (currentTime < guardCoolDownTime)
+        {
+            currentTime += Time.deltaTime;
+            yield return null;
+        }
+        isGuardCoolDown = false;
     }
 
     private void OnCollisionEnter2D(Collision2D collision)
     {
-        if (collision.gameObject.layer == 7)
+        switch (collision.gameObject.layer)
         {
-            state = PlayerState.Idle;
+            case 7:     // 지면충돌
+                if (onCollisionEnemy)   // 적충돌 동시 지면충돌
+                {
+                    ChangeState(PlayerState.Crush);
+                }
+                else                    // 지면하고만
+                {
+                    ChangeState(PlayerState.Idle);
+                }
+                break;
+            case 8:     // 적충돌
+                if (playerstate == PlayerState.Idle)    // 지상에서 깔림
+                {
+                    ChangeState(PlayerState.Crush);
+                }
+                break;
+        }
+    }
+
+    bool onCollisionEnemy = false;
+
+    private void OnCollisionStay2D(Collision2D collision)
+    {
+        if(collision.gameObject.layer == 8)
+        {
+            onCollisionEnemy = true;
+        }
+        
+    }
+
+    private void OnCollisionExit2D(Collision2D collision)
+    {
+        if (collision.gameObject.layer == 8)
+        {
+            onCollisionEnemy = false;
         }
     }
 }
