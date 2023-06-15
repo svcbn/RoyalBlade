@@ -9,3 +9,4 @@
   
   ---
   프로젝트 영상 - [YouTube](https://youtu.be/K3CqA0M0ixM)
+  APK - [Google Drive](https://drive.google.com/file/d/1L_n8Pg3gfJFtKbCf53uPB1uptBiOU9P8/view?usp=drive_link)
